@@ -1,0 +1,27 @@
+{
+  "name": "print-server-windows",
+  "version": "1.0.0",
+  "description": "Windows 版打印服务器：基于 Node.js + Express，通过 HTTP 接口提交打印任务，支持多格式文件，并监控任务与打印机状态（使用 Windows 打印后台处理程序）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test"
+  },
+  "keywords": [
+    "print",
+    "printer",
+    "windows",
+    "winspool",
+    "express"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "multer": "^2.0.2"
+  },
+  "engines": {
+    "node": ">=14"
+  }
+}

@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>打印服务器 · 监控面板</title>
+  <style>
+    :root {
+      --bg: #f5f6f8;
+      --panel: #ffffff;
+      --border: #e3e6ec;
+      --text: #1f2430;
+      --muted: #6b7280;
+      --primary: #2563eb;
+      --primary-light: #dbeafe;
+      --green: #16a34a; --green-bg: #dcfce7;
+      --amber: #d97706; --amber-bg: #fef3c7;
+      --red: #dc2626;   --red-bg: #fee2e2;
+      --gray-bg: #f1f5f9;
+      --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg); color: var(--text); line-height: 1.5; padding: 24px;
+    }
+    .wrap { max-width: 1180px; margin: 0 auto; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+    h1 { font-size: 22px; font-weight: 650; display: flex; align-items: center; gap: 10px; }
+    h1 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px var(--green-bg); }
+    .header-meta { color: var(--muted); font-size: 13px; display: flex; gap: 16px; align-items: center; }
+    .btn { border: 1px solid var(--border); background: var(--panel); color: var(--text); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; transition: .15s; }
+    .btn:hover { border-color: var(--primary); color: var(--primary); }
+    .btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .btn-primary:hover { background: #1d4ed8; color: #fff; }
+    .btn-danger { color: var(--red); }
+    .btn-danger:hover { border-color: var(--red); color: var(--red); }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); }
+    .card-title { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+
+    .stat-num { font-size: 30px; font-weight: 700; line-height: 1; }
+    .stat-sub { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+    .printer { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .printer-name { font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .printer-info { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.7; }
+    .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+    .badge .pdot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .b-idle { background: var(--green-bg); color: var(--green); }
+    .b-processing { background: var(--amber-bg); color: var(--amber); }
+    .b-stopped, .b-failed, .b-aborted, .b-cancelled { background: var(--red-bg); color: var(--red); }
+    .b-pending, .b-submitting { background: var(--primary-light); color: var(--primary); }
+    .b-held { background: var(--amber-bg); color: var(--amber); }
+    .b-default { background: var(--gray-bg); color: var(--muted); }
+
+    .section-head { display: flex; align-items: center; justify-content: space-between; margin: 28px 0 12px; }
+    .section-head h2 { font-size: 16px; font-weight: 650; }
+    .filters { display: flex; gap: 8px; }
+    .filters select, .filters input { border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 13px; background: var(--panel); color: var(--text); }
+
+    table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+    th, td { text-align: left; padding: 11px 14px; font-size: 13px; border-bottom: 1px solid var(--border); }
+    th { background: #fafbfc; color: var(--muted); font-weight: 600; font-size: 12px; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafbfd; }
+    .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: var(--muted); }
+    .file-name { font-weight: 500; word-break: break-all; }
+    .empty { text-align: center; color: var(--muted); padding: 40px; font-size: 14px; }
+
+    /* 模态框 */
+    .overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 50; align-items: center; justify-content: center; padding: 20px; }
+    .overlay.show { display: flex; }
+    .modal { background: var(--panel); border-radius: 16px; width: 100%; max-width: 480px; padding: 26px; box-shadow: 0 20px 50px rgba(0,0,0,.2); max-height: 90vh; overflow-y: auto; }
+    .modal h3 { font-size: 18px; margin-bottom: 4px; }
+    .modal .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    .field input[type=file], .field select, .field input[type=text], .field input[type=number] {
+      width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; font-size: 13px; font-family: inherit; background: var(--panel); color: var(--text);
+    }
+    .field input[type=file] { padding: 8px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+    .msg { font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-top: 12px; display: none; }
+    .msg.ok { display: block; background: var(--green-bg); color: var(--green); }
+    .msg.err { display: block; background: var(--red-bg); color: var(--red); }
+
+    .toast { position: fixed; right: 24px; bottom: 24px; background: #1f2430; color: #fff; padding: 12px 18px; border-radius: 10px; font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.2); opacity: 0; transform: translateY(10px); transition: .25s; z-index: 100; pointer-events: none; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; margin-right: 6px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (max-width: 640px){ .row{grid-template-columns:1fr} .filters{flex-wrap:wrap} }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span class="dot"></span> 打印服务器</h1>
+    <div class="header-meta">
+      <span id="healthText">正在检测服务...</span>
+      <button class="btn" onclick="refreshAll()">刷新</button>
+      <button class="btn btn-primary" onclick="openModal()">+ 提交打印</button>
+    </div>
+  </header>
+
+  <div class="grid" id="statCards">
+    <div class="card"><div class="card-title">打印机</div><div class="stat-num" id="statPrinters">-</div><div class="stat-sub" id="statPrintersSub">加载中...</div></div>
+    <div class="card"><div class="card-title">进行中任务</div><div class="stat-num" id="statActive">-</div><div class="stat-sub">等待 / 打印中</div></div>
+    <div class="card"><div class="card-title">已完成任务</div><div class="stat-num" id="statDone">-</div><div class="stat-sub">历史累计</div></div>
+    <div class="card"><div class="card-title">失败 / 取消</div><div class="stat-num" id="statFail">-</div><div class="stat-sub">历史累计</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">打印机状态</div>
+    <div class="grid" id="printerList" style="margin:0"></div>
+  </div>
+
+  <div class="section-head">
+    <h2>打印任务</h2>
+    <div class="filters">
+      <select id="filterStatus" onchange="loadJobs()">
+        <option value="">全部状态</option>
+        <option value="submitting">提交中</option>
+        <option value="pending">等待中</option>
+        <option value="processing">打印中</option>
+        <option value="completed">已完成</option>
+        <option value="cancelled">已取消</option>
+        <option value="failed">失败</option>
+      </select>
+      <select id="filterPrinter" onchange="loadJobs()"><option value="">全部打印机</option></select>
+    </div>
+  </div>
+  <table>
+    <thead><tr>
+      <th>任务</th><th>打印机</th><th>状态</th><th>份数</th><th>提交时间</th><th>任务号</th><th>操作</th>
+    </tr></thead>
+    <tbody id="jobRows"><tr><td colspan="7" class="empty">加载中...</td></tr></tbody>
+  </table>
+</div>
+
+<!-- 提交打印模态框 -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h3>提交打印任务</h3>
+    <div class="sub">上传文件并提交到打印队列</div>
+    <form id="printForm" onsubmit="submitPrint(event)">
+      <div class="field">
+        <label>打印文件 *</label>
+        <input type="file" id="fFile" required accept=".pdf,.png,.jpg,.jpeg,.gif,.tif,.tiff,.bmp,.webp,.txt,.log,.csv,.ps,.eps,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.rtf">
+        <div style="font-size:12px;color:var(--muted);margin-top:6px">支持 PDF、图片、文本、PostScript、Office 文档（Office 通过本机已安装的 Office/WPS 打印）</div>
+      </div>
+      <div class="field">
+        <label>打印机 *</label>
+        <select id="fPrinter" required></select>
+      </div>
+      <div class="row">
+        <div class="field"><label>份数</label><input type="number" id="fCopies" value="1" min="1" max="999"></div>
+        <div class="field"><label>任务标题</label><input type="text" id="fTitle" placeholder="可选"></div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>纸张</label>
+          <select id="fMedia"><option value="">默认</option><option>A4</option><option>Letter</option><option>Legal</option><option>A5</option><option>B5</option></select>
+        </div>
+        <div class="field">
+          <label>双面</label>
+          <select id="fDuplex"><option value="">单面</option><option value="duplex">双面（长边）</option><option value="two-sided-short-edge">双面（短边）</option></select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>颜色</label>
+          <select id="fColor"><option value="">默认</option><option value="color">彩色</option><option value="monochrome">黑白</option></select>
+        </div>
+        <div class="field">
+          <label>方向</label>
+          <select id="fOrient"><option value="">默认</option><option value="portrait">纵向</option><option value="landscape">横向</option></select>
+        </div>
+      </div>
+      <div id="formMsg" class="msg"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick="closeModal()">取消</button>
+        <button type="submit" class="btn btn-primary" id="submitBtn">提交打印</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/api';
+let printersCache = [];
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+function stateBadge(state, label) {
+  const cls = ['idle','processing','stopped','pending','submitting','completed','cancelled','failed','aborted','held'].includes(state) ? state : 'stopped';
+  return `<span class="badge b-${cls}"><span class="pdot"></span>${label || state}</span>`;
+}
+
+async function api(path, opts) {
+  const r = await fetch(API + path, opts);
+  const j = await r.json();
+  if (!j.success && r.status >= 400) throw new Error(j.error?.message || '请求失败');
+  return j;
+}
+
+async function loadHealth() {
+  try {
+    const r = await fetch(API + '/health');
+    const j = await r.json();
+    document.getElementById('healthText').innerHTML = j.success
+      ? '<span style="color:var(--green)">● 服务正常</span>'
+      : '<span style="color:var(--red)">● 打印服务异常</span>';
+  } catch(e) { document.getElementById('healthText').innerHTML = '<span style="color:var(--red)">● 无法连接</span>'; }
+}
+
+async function loadPrinters() {
+  const j = await api('/printers');
+  printersCache = j.data.printers;
+  const idle = printersCache.filter(p => p.state === 'idle').length;
+  document.getElementById('statPrinters').textContent = printersCache.length;
+  document.getElementById('statPrintersSub').textContent = `${idle} 台空闲 · ${printersCache.length - idle} 台忙碌/停止`;
+
+  const list = document.getElementById('printerList');
+  if (!printersCache.length) { list.innerHTML = '<div class="empty">未发现打印机</div>'; return; }
+  list.innerHTML = printersCache.map(p => {
+    const info = [
+      p.info || p.name,
+      p.makeModel || '',
+      p.location ? '位置: ' + p.location : '',
+      '队列: ' + p.queuedJobs,
+      p.isDefault ? '默认打印机' : '',
+    ].filter(Boolean).join(' · ');
+    return `<div class="card" style="box-shadow:none">
+      <div class="printer">
+        <div>
+          <div class="printer-name">${esc(p.name)} ${stateBadge(p.state, p.stateLabel)} ${p.isDefault ? '<span class="badge b-default">默认</span>' : ''}</div>
+          <div class="printer-info">${esc(info)}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // 填充筛选和表单的下拉
+  const filter = document.getElementById('filterPrinter');
+  const cur = filter.value;
+  filter.innerHTML = '<option value="">全部打印机</option>' + printersCache.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('');
+  filter.value = cur;
+  const fsel = document.getElementById('fPrinter');
+  const fcur = fsel.value;
+  const def = printersCache.find(p => p.isDefault);
+  fsel.innerHTML = printersCache.map(p => `<option value="${esc(p.name)}">${esc(p.name)}${p.isDefault?'（默认）':''}</option>`).join('');
+  fsel.value = fcur || (def ? def.name : (printersCache[0]?.name || ''));
+}
+
+async function loadJobs() {
+  const params = new URLSearchParams({ limit: 100 });
+  const st = document.getElementById('filterStatus').value;
+  const pr = document.getElementById('filterPrinter').value;
+  if (st) params.set('status', st);
+  if (pr) params.set('printer', pr);
+  const j = await api('/jobs?' + params.toString());
+  const jobs = j.data.jobs;
+  const stats = await api('/jobs/stats');
+  const s = stats.data;
+  document.getElementById('statActive').textContent = (s.byStatus.pending||0)+(s.byStatus.processing||0)+(s.byStatus.submitting||0);
+  document.getElementById('statDone').textContent = s.byStatus.completed||0;
+  document.getElementById('statFail').textContent = (s.byStatus.failed||0)+(s.byStatus.cancelled||0)+(s.byStatus.aborted||0);
+
+  const tbody = document.getElementById('jobRows');
+  if (!jobs.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty">暂无打印任务</td></tr>'; return; }
+  tbody.innerHTML = jobs.map(job => {
+    const canCancel = !['completed','cancelled','failed','aborted'].includes(job.status);
+    return `<tr>
+      <td><div class="file-name">${esc(job.originalName)}</div><div class="mono">${esc(job.id)}</div></td>
+      <td>${esc(job.printer)}</td>
+      <td>${stateBadge(job.status, job.stateLabel)}</td>
+      <td>${job.copies}</td>
+      <td class="mono">${fmtTime(job.createdAt)}</td>
+      <td class="mono">${esc(job.cupsId || '-')}</td>
+      <td>${canCancel ? `<button class="btn btn-danger" onclick="cancelJob('${job.id}')">取消</button>` : '<span style="color:var(--muted);font-size:12px">—</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function fmtTime(iso) {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  return d.toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+function esc(s) { return String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+async function refreshAll() {
+  try { await Promise.all([loadHealth(), loadPrinters(), loadJobs()]); }
+  catch(e) { toast('刷新失败: ' + e.message); }
+}
+
+function openModal() {
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('formMsg').className = 'msg';
+}
+function closeModal() { document.getElementById('overlay').classList.remove('show'); }
+document.getElementById('overlay').addEventListener('click', e => { if (e.target.id === 'overlay') closeModal(); });
+
+async function submitPrint(ev) {
+  ev.preventDefault();
+  const file = document.getElementById('fFile').files[0];
+  if (!file) { showFormMsg('请选择文件', true); return; }
+  const options = {};
+  if (document.getElementById('fMedia').value) options.media = document.getElementById('fMedia').value;
+  if (document.getElementById('fDuplex').value) options.sides = document.getElementById('fDuplex').value;
+  if (document.getElementById('fColor').value) options.color = document.getElementById('fColor').value === 'color';
+  if (document.getElementById('fOrient').value) options.orientation = document.getElementById('fOrient').value;
+
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('printer', document.getElementById('fPrinter').value);
+  fd.append('copies', document.getElementById('fCopies').value || 1);
+  if (document.getElementById('fTitle').value) fd.append('title', document.getElementById('fTitle').value);
+  if (Object.keys(options).length) fd.append('options', JSON.stringify(options));
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>提交中...';
+  try {
+    const j = await api('/print', { method: 'POST', body: fd });
+    showFormMsg('提交成功！任务号 ' + j.data.cupsId, false);
+    toast('打印任务已提交');
+    setTimeout(() => { closeModal(); document.getElementById('printForm').reset(); refreshAll(); }, 900);
+  } catch(e) { showFormMsg('提交失败: ' + e.message, true); }
+  finally { btn.disabled = false; btn.textContent = '提交打印'; }
+}
+function showFormMsg(msg, isErr) {
+  const el = document.getElementById('formMsg');
+  el.textContent = msg; el.className = 'msg ' + (isErr ? 'err' : 'ok');
+}
+
+async function cancelJob(id) {
+  if (!confirm('确定取消该打印任务吗？')) return;
+  try { await api('/jobs/' + encodeURIComponent(id), { method: 'DELETE' }); toast('任务已取消'); refreshAll(); }
+  catch(e) { toast('取消失败: ' + e.message); }
+}
+
+refreshAll();
+setInterval(() => { if (!document.getElementById('overlay').classList.contains('show')) loadJobs(); }, 5000);
+setInterval(loadPrinters, 15000);
+setInterval(loadHealth, 10000);
+</script>
+</body>
+</html>
